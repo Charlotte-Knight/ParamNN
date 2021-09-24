@@ -18,19 +18,19 @@ else:
 
 noPre = lambda x: x #place holder for no preprocessing
 
-def loadData(frac=1, n_signal=-1):
-  if n_signal > -1:
-    frac = n_signal / 7e6
-
+def loadData(frac=1):
   print("Loading train data")
   with open("/vols/cms/mdk16/ggtt/ParamNN/data/all_train.pkl", "rb") as f:
-    train_df = pickle.load(f).sample(frac=1).reset_index(drop=True)
+    train_df = pickle.load(f).sample(frac=frac).reset_index(drop=True)
+  print("Loaded %dk training samples"%(len(train_df)/1000))
+  
   print("Loading test data")
   with open("/vols/cms/mdk16/ggtt/ParamNN/data/all_test.pkl", "rb") as f:
-    test_df = pickle.load(f).sample(frac=1).reset_index(drop=True)
+    test_df = pickle.load(f).sample(frac=frac).reset_index(drop=True)
+  print("Loaded %dk test samples"%(len(test_df)/1000))
 
   train_df.loc[abs(train_df.mass-500)<1, "mass"] = 500.0
-  test_df.loc[abs(train_df.mass-500)<1, "mass"] = 500.0
+  test_df.loc[abs(test_df.mass-500)<1, "mass"] = 500.0
 
   return train_df, test_df
 
@@ -47,10 +47,10 @@ class TorchHelper:
       batch_X = X[i_picture:i_picture + batch_size]
       batch_y = y[i_picture:i_picture + batch_size]
     
-    X_torch = torch.tensor(batch_X, dtype=torch.float).reshape(-1, X.shape[1]).to(dev)
-    Y_torch = torch.tensor(batch_y, dtype=torch.float).to(dev)
+      X_torch = torch.tensor(batch_X, dtype=torch.float).reshape(-1, X.shape[1]).to(dev)
+      Y_torch = torch.tensor(batch_y, dtype=torch.float).to(dev)
 
-    yield X_torch, Y_torch
+      yield X_torch, Y_torch
 
   def getTotAvgLoss(self, model, loss_function, X, y, batch_size):
     losses = []
@@ -65,21 +65,31 @@ class TorchHelper:
     y_train = y_train.to_numpy()
     y_test = y_test.to_numpy()
     
+    train_masses = sorted(np.unique(X_train[:,-1]))
+
     loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     train_loss = []
     test_loss = []
 
-    for i_epoch in tqdm(range(n_epochs)):      
-      for batch_X, batch_y in self.getBatches(X_train, y_train, batch_size, shuffle=True):
+    for i_epoch in tqdm(range(n_epochs)):     
+      for batch_X, batch_y in tqdm(self.getBatches(X_train, y_train, batch_size, shuffle=True), leave=False):
         loss = loss_function(model(batch_X), batch_y)
         model.zero_grad()
         loss.backward()
         optimizer.step()
 
-      train_loss.append(self.getTotAvgLoss(model, loss_function, X_train, y_train, batch_size))
-      test_loss.append(self.getTotAvgLoss(model, loss_function, X_test, y_test, batch_size))
+      trl = []
+      tel = []
+      for mass in train_masses:
+      #for mass in [500, 750, 1000, 1250, 1500]:
+        trl.append(self.getTotAvgLoss(model, loss_function, X_train[X_train[:,-1]==mass], y_train[X_train[:,-1]==mass], batch_size))
+        tel.append(self.getTotAvgLoss(model, loss_function, X_test[X_test[:,-1]==mass], y_test[X_test[:,-1]==mass], batch_size))
+      train_loss.append(trl)
+      test_loss.append(tel)
+      #train_loss.append(self.getTotAvgLoss(model, loss_function, X_train, y_train, batch_size))
+      #test_loss.append(self.getTotAvgLoss(model, loss_function, X_test, y_test, batch_size))
       
     return train_loss, test_loss
 

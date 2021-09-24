@@ -1,11 +1,13 @@
 import helpers
 import torch
 import matplotlib.pyplot as plt
+import numpy as np
 
 if torch.cuda.is_available():  
   dev = "cuda:0" 
 else:  
   dev = "cpu" 
+print(dev)
 
 def preX(X):
   X_copy = X.copy()
@@ -14,16 +16,15 @@ def preX(X):
 
 """-------------------------------------------------------------------------------"""
 
-train_df, test_df = helpers.loadData(n_signal=50000)
+train_df, test_df = helpers.loadData(frac=0.1)
 
 important_features = ["f%d"%i for i in [0,3,6,10,14,23,26]]
 #important_features = ["f26"]
 important_features.append("mass")
 n_features = len(important_features)
 
-train_masses = [1250,1500]
-train_masses = [750, 1250, 1500]
-interp_masses = [1000]
+all_masses = [500, 750, 1000, 1250, 1500]
+train_masses = [750, 1000, 1250, 1500]
 
 X_train = train_df[train_df.mass.isin(train_masses)][important_features]
 X_test = test_df[test_df.mass.isin(train_masses)][important_features]
@@ -46,18 +47,34 @@ model = torch.nn.Sequential(
 
 model.to(dev)
 
-train_loss, test_loss = th.train(model, X_train, y_train, X_test, y_test, n_epochs=50, batch_size=32, lr=0.025)
+train_loss, test_loss = th.train(model, X_train, y_train, X_test, y_test, n_epochs=1, batch_size=128, lr=0.01)
 
 """-------------------------------------------------------------------------------"""
 
-#loss plot
-plt.plot(test_loss, label="test")
-plt.plot(train_loss, label="train")
+train_loss, test_loss = np.array(train_loss), np.array(test_loss)
+
+#loss plots per mass
+for i, mass in enumerate(train_masses):
+  plt.plot(test_loss[:,i], label="test")
+  plt.plot(train_loss[:,i], label="train")
+  plt.legend()
+  plt.savefig("plots/highdimExample/loss_%s.png"%mass)
+  plt.clf()
+
+#total loss plot
+plt.plot(test_loss.sum(axis=1), label="test")
+plt.plot(train_loss.sum(axis=1), label="train")
 plt.legend()
 plt.savefig("plots/highdimExample/loss.png")
 plt.clf()
 
-for mass in train_masses:
+#put interp masses back in
+X_train = train_df[important_features]
+X_test = test_df[important_features]
+y_train = train_df["y"]
+y_test = test_df["y"]
+
+for mass in all_masses:
   #output score on train set
   bkg_scores = th.predict(model, X_train[(X_train.mass==mass)&(y_train==0)])
   sig_scores = th.predict(model, X_train[(X_train.mass==mass)&(y_train==1)])
@@ -79,7 +96,7 @@ for mass in train_masses:
   plt.yscale("log")
   plt.savefig("plots/highdimExample/test_scores_m%d.png"%mass)
   plt.clf()
-
+  
   #ROC curves
   fpr, tpr, score = th.getROC(model, X_train[X_train.mass==mass], y_train[X_train.mass==mass])
   plt.plot(fpr, tpr, label="Train AUC=%.4f"%score)
