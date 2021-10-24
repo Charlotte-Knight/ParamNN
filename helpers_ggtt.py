@@ -35,13 +35,14 @@ def normaliseFeatures(df):
        'dR_ggtautauLoose', 'dPhi_ggtautauLoose', 'dPhi_ggtautauSVFitLoose',
        'Category_pairsLoose']
   dff = df[features]
-  #df.loc[:, features]= (dff-dff.min())/(dff.max()-dff.min())
+  df.loc[:, features] = (dff-dff.min())/(dff.max()-dff.min())
   return df
 
 def loadData(frac=1):
   print("Loading data")
   dfs = []
-  path = "/home/hep/mdk16/PhD/ggtt/df_convert/Pass1/"
+  #path = "/home/hep/mdk16/PhD/ggtt/df_convert/Pass1/"
+  path = "Pass1/"
   #files = ["HHggtautau_ResonantPresel_1tau0lep_2018.pkl", "HHggtautau_ResonantPresel_1tau1lep_2018.pkl", "HHggtautau_ResonantPresel_2tau_2018.pkl"]
   files = ["HHggtautau_ResonantPresel_1tau0lep_2018.pkl"]
   for filename in files:
@@ -169,10 +170,12 @@ class TorchHelper:
     best_loss_epoch = np.where(train_loss==best_loss)[0][0] + 1
 
     if n_epochs - best_loss_epoch > y:
+      print("Best loss happened a while ago")
       return True
 
     best_loss_before = train_loss[:-y].min()
     if (best_loss_before-best_loss)/best_loss < x:
+      print("Not enough improvement")
       return True
 
     return False    
@@ -224,6 +227,10 @@ class TorchHelper:
       
       if self.shouldEarlyStop(train_loss):
         break
+
+      #shuffle masses in bkg
+      X_train[y_train==0,-1] = np.random.choice(train_masses, len(X_train[y_train==0][:,-1]))
+      X_test[y_test==0,-1] = np.random.choice(train_masses, len(X_test[y_test==0][:,-1]))
       
     return train_loss, test_loss
 
@@ -239,8 +246,32 @@ class TorchHelper:
   def getROC(self, model, X, y, weight=None):
     predictions = self.predict(model, X)
     fpr, tpr, t = roc_curve(y, predictions, sample_weight=weight)
+    #fpr, tpr, t = roc_curve(y, predictions)
     try:
       auc = roc_auc_score(y, predictions, sample_weight=weight)
+      #auc = roc_auc_score(y, predictions)
     except:
       auc = np.trapz(tpr, fpr)
     return fpr, tpr, auc
+
+  # def getROC(self, model, X, y, weight=None):
+  #   predictions = self.predict(model, X)
+  #   predictions = pd.DataFrame({"pred":predictions, "y":y})
+  #   predictions.sort_values(["pred"], inplace=True)
+  #   print(predictions)
+  #   fpr = []
+  #   tpr = []
+  #   sig_count = 0
+  #   bkg_count = 0
+  #   tot_sig = sum(predictions.y==1)
+  #   tot_bkg = sum(predictions.y==0)
+  #   for i in range(len(predictions)):
+  #     if predictions.iloc[i].y == 0:
+  #       bkg_count += 1
+  #     else:
+  #       sig_count += 1
+  #     fpr.append((tot_bkg-bkg_count)/tot_bkg)
+  #     tpr.append((tot_sig-sig_count)/tot_sig)
+    
+  #   auc = np.trapz(tpr, fpr)
+  #   return fpr, tpr, auc
