@@ -44,10 +44,11 @@ def oneHot(df, features):
     
 def normaliseFeatures(df):
   id_features = ['tau1_id_vs_e', 'tau1_id_vs_m', 'tau1_id_vs_j', 'tau2_id_vs_e', 'tau2_id_vs_m', 'tau2_id_vs_j', 'jet1_id', 'jet2_id']
-  print(id_features)
-  df = oneHot(df, id_features)
+  #print(id_features)
+  #df = oneHot(df, id_features)
 
   other_features = list(filter(lambda x: x not in id_features, all_features))
+  other_features.remove("gg_mass")
 
   df = minMaxNormFeatures(df, other_features)
   #df.loc[:,"reco_mX"] /= 1000
